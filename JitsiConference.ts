@@ -2429,7 +2429,6 @@ export default class JitsiConference extends Listenable {
                         message
                     });
                     xmpp = undefined;
-                    this.cleanUpWebWorkers();
                 });
 
             canceled || xmpp.connect(id, password);

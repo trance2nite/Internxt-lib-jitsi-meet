@@ -63,7 +63,6 @@ export default class E2EEcontext extends Listenable {
 
     /**
      * Disposes of the worker and cleans up resources.
-     * Call this when the E2EE context is no longer needed.
      */
     dispose() {
         logger.info('E2EE: Disposing E2EE context and terminating worker');
@@ -74,8 +73,6 @@ export default class E2EEcontext extends Listenable {
             URL.revokeObjectURL(this._workerUrl);
             this._workerUrl = null;
         }
-
-        this.removeAllListeners();
     }
 
     cleanup(participantId: string) {

@@ -99,22 +99,18 @@ export class ManagedKeyHandler extends Listenable {
             JitsiConferenceEvents.CONFERENCE_LEFT,
             this._onConferenceLeft.bind(this),
         );
-        this.conference.on(JitsiConferenceEvents.CONFERENCE_JOINED, () => {
-            this._conferenceJoined = true;
-        });
+        this.conference.on(JitsiConferenceEvents.CONFERENCE_JOINED, this.onConferenceJoined.bind(this));
         this.conference.on(
             JitsiConferenceEvents._MEDIA_SESSION_STARTED,
             this._onMediaSessionStarted.bind(this),
         );
         this.conference.on(
             JitsiConferenceEvents.TRACK_ADDED,
-            (track: JitsiLocalTrack) =>
-                track.isLocal() && this._onLocalTrackAdded(track),
+            this.onTrackAddedHandler.bind(this),
         );
         this.conference.rtc.on(
             RTCEvents.REMOTE_TRACK_ADDED,
-            (track: JitsiLocalTrack, tpc: TraceablePeerConnection) =>
-                this._setupReceiverE2EEForTrack(tpc, track),
+            this.onRemoteTrackAddedHandler.bind(this),
         );
         this.conference.on(
             JitsiConferenceEvents.TRACK_MUTE_CHANGED,
@@ -125,16 +121,33 @@ export class ManagedKeyHandler extends Listenable {
 
         this._olmAdapter = new OlmAdapter(this.myID);
 
-        this.e2eeCtx.on('sasUpdated', (sasStr: string) => {
-            const sas = generateEmojiSas(sasStr);
-
-            this.log('info', `Emitting SAS: ${sas.join(', ')}`);
-            this.conference.eventEmitter.emit(
-                JitsiConferenceEvents.E2EE_SAS_AVAILABLE,
-                sas,
-            );
-        });
+        this.e2eeCtx.on('sasUpdated', this.sasUpdatedHandler);
     }
+
+    private onConferenceJoined() {
+        this._conferenceJoined = true;
+    }
+
+    private onTrackAddedHandler = (track: JitsiLocalTrack) => {
+        if (track.isLocal()) {
+            this._onLocalTrackAdded(track);
+        }
+    };
+
+    private onRemoteTrackAddedHandler = (track: JitsiLocalTrack, tpc: TraceablePeerConnection) => {
+        this._setupReceiverE2EEForTrack(tpc, track);
+    };
+
+
+    private sasUpdatedHandler = (sasStr: string) => {
+        const sas = generateEmojiSas(sasStr);
+
+        this.log('info', `Emitting SAS: ${sas.join(', ')}`);
+        this.conference.eventEmitter.emit(
+        JitsiConferenceEvents.E2EE_SAS_AVAILABLE,
+        sas,
+        );
+    };
 
     private async init() {
         await this._olmAdapter.init();
@@ -390,8 +403,7 @@ export class ManagedKeyHandler extends Listenable {
     }
 
     private _onConferenceLeft() {
-        this.clearAllSessions();
-        this._olmAdapter.clearMySession();
+        this.dispose();
     }
 
     private async updateKey(pId: string, ciphertext: string, pqCiphertext: string) {
@@ -854,7 +866,45 @@ export class ManagedKeyHandler extends Listenable {
     }
 
     dispose() {
+        this._olmAdapter.clearMySession();
+        this.clearAllSessions();
+        this.conference.off(
+            JitsiConferenceEvents.USER_JOINED,
+            this._onParticipantJoined.bind(this),
+        );
+        this.conference.off(
+            JitsiConferenceEvents.USER_LEFT,
+            this._onParticipantLeft.bind(this),
+        );
+        this.conference.off(
+            JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
+            this._onEndpointMessageReceived.bind(this),
+        );
+        this.conference.off(
+            JitsiConferenceEvents.CONFERENCE_LEFT,
+            this._onConferenceLeft.bind(this),
+        );
+        this.conference.off(JitsiConferenceEvents.CONFERENCE_JOINED, this.onConferenceJoined.bind(this));
+        this.conference.off(
+            JitsiConferenceEvents._MEDIA_SESSION_STARTED,
+            this._onMediaSessionStarted.bind(this),
+        );
+        this.conference.off(
+            JitsiConferenceEvents.TRACK_ADDED,
+            this.onTrackAddedHandler.bind(this),
+        );
+        this.conference.rtc.off(
+            RTCEvents.REMOTE_TRACK_ADDED,
+            this.onRemoteTrackAddedHandler.bind(this),
+        );
+        this.conference.off(
+            JitsiConferenceEvents.TRACK_MUTE_CHANGED,
+            this._trackMuteChanged.bind(this),
+        );
+        this.e2eeCtx.off('sasUpdated', this.sasUpdatedHandler);
         this.e2eeCtx.dispose();
+        this._reqs.clear();
+        this.update.clear();
     }
 
     /**
