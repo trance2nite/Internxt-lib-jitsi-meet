@@ -41,6 +41,12 @@ export class WorkerMock {
     postMessage(data: any) {
         this._fakeWorkerSelf.onmessage?.({ data } as MessageEvent);
     }
+
+    terminate() {
+        this.onmessage = null;
+        this.onerror = null;
+        this._fakeWorkerSelf.onmessage = null;
+    }
 }
 
 export class XmppServerMock {
