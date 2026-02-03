@@ -88,7 +88,6 @@ export default class JitsiRemoteTrack extends JitsiTrack {
     public isP2P: boolean;
     public rtcId: Nullable<string>;
     public inputTensor: Nullable<any>;
-    public imageDataOutput: Nullable<ImageData>;
     public dataOutput: Nullable<ImageData>;
     public input: Nullable<any>;
     public frame: Nullable<ImageBitmap>;
@@ -186,7 +185,6 @@ export default class JitsiRemoteTrack extends JitsiTrack {
         this._decodedTrack = null;
         // Steam objects
         this.inputTensor = null;
-        this.imageDataOutput = null;
         this.dataOutput = null;
         this.input = {
             input: null
@@ -720,6 +718,9 @@ export default class JitsiRemoteTrack extends JitsiTrack {
         this.attachoff = false;
         this.width = 0;
         this.height = 0;
+        this.dataOutput = null;
+        this.input = null;
+        this.inputBuffer = null;
         if (this.disposed) {
             return;
         }
