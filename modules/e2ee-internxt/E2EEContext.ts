@@ -15,6 +15,7 @@ const logger = getLogger('modules/e2ee-internxt/E2EEContext');
 export default class E2EEcontext extends Listenable {
     private readonly _worker: Worker;
     private _workerUrl: string | null = null;
+    private scriptEl: HTMLScriptElement | null = null;
 
     constructor() {
         super();
@@ -32,15 +33,15 @@ export default class E2EEcontext extends Listenable {
     }
 
     private _initializeWorker(): Worker {
-        const scriptEl = document.querySelector<HTMLScriptElement>(
+        this.scriptEl = document.querySelector<HTMLScriptElement>(
             'script[src*="lib-jitsi-meet"]',
         );
         let baseUrl = '';
 
-        if (scriptEl) {
-            const idx = scriptEl.src.lastIndexOf('/');
+        if (this.scriptEl) {
+            const idx = this.scriptEl.src.lastIndexOf('/');
 
-            baseUrl = `${scriptEl.src.substring(0, idx)}/`;
+            baseUrl = `${this.scriptEl.src.substring(0, idx)}/`;
         }
 
         let workerUrl = `${baseUrl}lib-jitsi-meet.e2ee-worker.js`;
@@ -73,6 +74,8 @@ export default class E2EEcontext extends Listenable {
             URL.revokeObjectURL(this._workerUrl);
             this._workerUrl = null;
         }
+        this.scriptEl?.remove();
+        this.scriptEl = null;
     }
 
     cleanup(participantId: string) {
