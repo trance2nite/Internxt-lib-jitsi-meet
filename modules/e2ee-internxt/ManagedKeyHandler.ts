@@ -410,12 +410,20 @@ export class ManagedKeyHandler extends Listenable {
         }
     }
 
-    private noOtherModerators(): boolean {
-        if (this.conference.isModerator()) return true;
-
+    private isThisParticipantFirst(pId: string): boolean {
+        const localParticipantId = this.myID;
         const participants = this.conference.getParticipants();
+        const list = participants.filter(
+            participant =>
+                (participant.hasFeature(FEATURE_E2EE)
+                || participant.getProperty('e2ee.enabled') === 'true')
+                && localParticipantId > participant.getId(),
+        ).sort((a, b) => a.getId().localeCompare(b.getId()));
 
-        return !participants.some(p => p.isModerator());
+        if (list.length === 0) return false;
+        const firstParticipant = list[0].getId();
+
+        return firstParticipant === pId;
     }
 
     private async _onEndpointMessageReceived(participant: JitsiParticipant, payload) {
@@ -516,7 +524,7 @@ export class ManagedKeyHandler extends Listenable {
                         pId,
                 );
 
-                if (!this.askedForChatKey && (participant.isModerator() || this.noOtherModerators())) {
+                if (!this.askedForChatKey && this.isThisParticipantFirst(pId)) {
                     this.log('info', `Requesting chat key from ${pId}.`);
                     this._sendMessage(
                         OLM_MESSAGE_TYPES.CHAT_KEY_REQUEST,
@@ -787,7 +795,7 @@ export class ManagedKeyHandler extends Listenable {
             `Should send session-init to IDs: [ ${list.map(p => p.getId())}]`,
         );
 
-        if (!this.askedForChatKey && list.length == 0) {
+        if (!this.askedForChatKey && list.length === 0) {
             this.log('info', 'Generated chat keys');
             const chatKeyECC = genSymmetricKey();
             const chatKeyPQ = genSymmetricKey();

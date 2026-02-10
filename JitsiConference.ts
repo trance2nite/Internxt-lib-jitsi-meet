@@ -522,7 +522,7 @@ export default class JitsiConference extends Listenable {
         this._iceRestarts = 0;
         this._unsubscribers = [];
 
-        this.eventEmitter.on(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key => {
+        this.eventEmitter.once(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key => {
             this.room.eventEmitter.emit(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key);
         });
     }
