@@ -418,7 +418,7 @@ export class ManagedKeyHandler extends Listenable {
                 (participant.hasFeature(FEATURE_E2EE)
                 || participant.getProperty('e2ee.enabled') === 'true')
                 && localParticipantId > participant.getId(),
-        );
+        ).sort((a, b) => a.getId().localeCompare(b.getId()));
 
         if (list.length === 0) return false;
         const firstParticipant = list[0].getId();
