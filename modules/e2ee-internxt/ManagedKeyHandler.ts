@@ -423,7 +423,7 @@ export class ManagedKeyHandler extends Listenable {
         if (list.length === 0) return false;
         const firstParticipant = list[0].getId();
 
-        return firstParticipant == pId;
+        return firstParticipant === pId;
     }
 
     private async _onEndpointMessageReceived(participant: JitsiParticipant, payload) {
