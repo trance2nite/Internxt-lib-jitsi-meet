@@ -342,7 +342,7 @@ export default class ChatRoom extends Listenable {
         this.transcriptionStatus = JitsiTranscriptionStatus.OFF;
         this.initialDiscoRoomInfoReceived = false;
 
-        this.eventEmitter.on(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, this.setEncryptionKey.bind(this));
+        this.eventEmitter.once(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, this.setEncryptionKey.bind(this));
 
     }
 
