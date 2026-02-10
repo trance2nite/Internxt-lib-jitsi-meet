@@ -795,7 +795,7 @@ export class ManagedKeyHandler extends Listenable {
             `Should send session-init to IDs: [ ${list.map(p => p.getId())}]`,
         );
 
-        if (!this.askedForChatKey && list.length == 0) {
+        if (!this.askedForChatKey && list.length === 0) {
             this.log('info', 'Generated chat keys');
             const chatKeyECC = genSymmetricKey();
             const chatKeyPQ = genSymmetricKey();
