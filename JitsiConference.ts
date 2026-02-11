@@ -4100,6 +4100,7 @@ export default class JitsiConference extends Listenable {
                 try {
                     if (typeof messageToSend !== 'string') {
                         messageToSend = JSON.stringify(messageToSend);
+                        logger.log('E2EE: Message was converted to string via JSON.stringify');
                     }
                 } catch (e) {
                     logger.error('Can not send a message, stringify failed: ', e);
