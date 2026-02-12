@@ -236,7 +236,7 @@ function extractIdentityInformation(node: IPresenceNode, hiddenFromRecorderFeatu
  */
 export default class ChatRoom extends Listenable {
 
-    private encyptionKey?: Uint8Array;
+    private encryptionKey?: Uint8Array;
     private password?: string;
     private replaceParticipant: boolean;
     private members: Record<string, IRoomMember>;
@@ -456,14 +456,14 @@ export default class ChatRoom extends Listenable {
     }
 
     public setEncryptionKey(key: Uint8Array): void {
-        this.encyptionKey = key;
+        this.encryptionKey = key;
         logger.info('E2E: ChatRoom got encryption key.');
 
         if (this.pendingEncryptedMessages.length > 0) {
             logger.info(`E2E: Decrypting ${this.pendingEncryptedMessages.length} queued messages`);
             this.pendingEncryptedMessages.forEach(msg => {
                 try {
-                    const chatMessage = decryptSymmetricallySync(msg.txt, this.encyptionKey);
+                    const chatMessage = decryptSymmetricallySync(msg.txt, this.encryptionKey);
 
                     this.eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
                         msg.from, chatMessage, this.myroomjid, msg.stamp, msg.displayName,
@@ -1170,10 +1170,10 @@ export default class ChatRoom extends Listenable {
             type: 'groupchat'
         });
 
-        if (this.encyptionKey) {
-            const payload = typeof message === 'object' ? JSON.stringify(message) : message;
+        if (this.encryptionKey) {
+            const plaintext = message;
 
-            message = encryptSymmetricallySync(payload, this.encyptionKey);
+            message = encryptSymmetricallySync(plaintext, this.encryptionKey);
         }
 
         // We are adding the message in a packet extension. If this element
@@ -1547,7 +1547,7 @@ export default class ChatRoom extends Listenable {
                 }
                 const source = isVisitorMessage ? undefined : sourceAttrValue;
 
-                if (this.options.isChatEncrypted && !this.encyptionKey) {
+                if (this.options.isChatEncrypted && !this.encryptionKey) {
                     this.pendingEncryptedMessages.push({
                         displayName,
                         from,
@@ -1562,7 +1562,7 @@ export default class ChatRoom extends Listenable {
                     return;
                 }
 
-                const chatMessage = this.encyptionKey ? decryptSymmetricallySync(txt, this.encyptionKey) : txt;
+                const chatMessage = this.encryptionKey ? decryptSymmetricallySync(txt, this.encryptionKey) : txt;
 
                 // we will fire explicitly that this is a visitor(isVisitor:true) to the conference
                 // a message with explicit name set
