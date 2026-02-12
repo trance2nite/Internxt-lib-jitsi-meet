@@ -13,6 +13,7 @@ class E2EEWorker {
     private readonly _self: WorkerLike;
 
     constructor(selfInstance: WorkerLike) {
+        console.info('E2EE: Web Worker created');
         this.contexts = new Map();
         this._self = selfInstance;
 

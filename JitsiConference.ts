@@ -522,7 +522,7 @@ export default class JitsiConference extends Listenable {
         this._iceRestarts = 0;
         this._unsubscribers = [];
 
-        this.eventEmitter.on(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key => {
+        this.eventEmitter.once(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key => {
             this.room.eventEmitter.emit(JitsiConferenceEvents.E2EE_CHAT_KEY_RECEIVED, key);
         });
     }
@@ -1243,7 +1243,7 @@ export default class JitsiConference extends Listenable {
 
         this.p2pJingleSession.invite(localTracks)
             .then(() => {
-                this.p2pJingleSession.addEventListener(MediaSessionEvents.VIDEO_CODEC_CHANGED, () => {
+                this.p2pJingleSession?.addEventListener(MediaSessionEvents.VIDEO_CODEC_CHANGED, () => {
                     this.eventEmitter.emit(JitsiConferenceEvents.VIDEO_CODEC_CHANGED);
                 });
             })
@@ -2482,6 +2482,13 @@ export default class JitsiConference extends Listenable {
         );
     }
 
+    public cleanUpWebWorkers(): void {
+        if (this._e2eEncryption) {
+            this._e2eEncryption.dispose();
+            this._e2eEncryption = null;
+        }
+    }
+
     /**
    * Leaves the conference.
    * @param {string|undefined} reason - The reason for leaving the conference.
@@ -2507,6 +2514,8 @@ export default class JitsiConference extends Listenable {
         if (this.statistics) {
             this.statistics.dispose();
         }
+
+        this.cleanUpWebWorkers();
 
         this._delayedIceFailed?.cancel();
 

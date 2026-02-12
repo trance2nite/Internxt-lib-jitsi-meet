@@ -405,17 +405,16 @@ export default class XmppConnection extends Listenable {
             if (this._usesWebsocket) {
                 if (this._oneSuccessfulConnect) {
                     // on reconnect we do it immediately
-                    this._keepAliveAndCheckShard();
+                    this._maybeStartWSKeepAlive(0);
                 } else {
                     // delay it a bit to not interfere with the connection process
                     // and to allow backend to correct any possible split brain issues
                     // Store timeout so it can be cleared if needed
-                    this._wsKeepAlive = setTimeout(() => this._keepAliveAndCheckShard(), 5000);
+                    this._maybeStartWSKeepAlive(5000);
                 }
             }
             this._oneSuccessfulConnect = true;
 
-            this._maybeStartWSKeepAlive();
             this._processDeferredIQs();
             this._resumeTask.cancel();
             this.ping.startInterval(this._options.pingOptions?.domain || this.domain);
@@ -526,24 +525,29 @@ export default class XmppConnection extends Listenable {
     /**
      * Starts the Websocket keep alive if enabled.
      *
+     * @param {number|undefined} forcedTimeout - If provided, this timeout will be used instead of
+     * the configured one with added jitter.
+     *
      * @private
      * @returns {void}
      */
-    _maybeStartWSKeepAlive(): void {
+    _maybeStartWSKeepAlive(forcedTimeout?: number): void {
         const { websocketKeepAlive } = this._options;
 
+        // if websocketKeepAlive is not set keepAlive is disabled
         if (this._usesWebsocket && websocketKeepAlive > 0) {
             this._wsKeepAlive || logger.info(`WebSocket keep alive interval: ${websocketKeepAlive}ms`);
             clearTimeout(this._wsKeepAlive);
 
-            const intervalWithJitter = /* base */ websocketKeepAlive + /* jitter */ (Math.random() * 60 * 1000);
+            const interval = forcedTimeout
+                ?? (/* base */ websocketKeepAlive + /* jitter */ (Math.random() * 60 * 1000));
 
-            logger.debug(`Scheduling next WebSocket keep-alive in ${intervalWithJitter}ms`);
+            logger.debug(`Scheduling next WebSocket keep-alive in ${interval}ms`);
 
             this._wsKeepAlive = setTimeout(
                 () => this._keepAliveAndCheckShard()
                     .then(() => this._maybeStartWSKeepAlive()),
-                intervalWithJitter);
+                interval);
         }
     }
 
@@ -568,7 +572,10 @@ export default class XmppConnection extends Listenable {
 
                 const responseShard = response.headers.get('x-jitsi-shard');
 
-                if (responseShard !== shard) {
+                !responseShard && logger.warn('No x-jitsi-shard header present in keep-alive response');
+
+                // Ignore if no shard header is present.
+                if (responseShard && responseShard !== shard) {
                     logger.error(
                         `Detected that shard changed from ${shard} to ${responseShard}`);
                     this.eventEmitter.emit(XmppConnection.Events.CONN_SHARD_CHANGED);
