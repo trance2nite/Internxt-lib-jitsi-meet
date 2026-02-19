@@ -127,6 +127,7 @@ export class OlmAdapter {
 
     async clearMySession() {
         this._olmAccount?.free();
+        this._olmDataMap.clear();
     }
 
     async createPQsessionInitMessage(

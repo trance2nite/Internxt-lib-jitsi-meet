@@ -5,6 +5,7 @@ import { JitsiConferenceEvents } from '../../JitsiConferenceEvents';
 import JitsiParticipant from '../../JitsiParticipant';
 import { RTCEvents } from '../../service/RTC/RTCEvents';
 import JitsiLocalTrack from '../RTC/JitsiLocalTrack';
+import JitsiTrack from '../RTC/JitsiTrack';
 import TraceablePeerConnection from '../RTC/TraceablePeerConnection';
 import browser from '../browser';
 import Listenable from '../util/Listenable';
@@ -63,6 +64,17 @@ export class ManagedKeyHandler extends Listenable {
     _olmAdapter: OlmAdapter;
     _conferenceJoined: boolean;
 
+    onUserJoined: EventListener;
+    onUserLeft: EventListener;
+    onEndpointMessageReceived: EventListener;
+    onConferenceJoined: EventListener;
+    onConferenceLeft: EventListener;
+    onMediaSessionStarted: EventListener;
+    onTrackAdded: EventListener;
+    onRemoteTrackAdded: EventListener;
+    onTrackMuteChanged: EventListener;
+    onSasUpdated: EventListener;
+
     /**
      * Build a new AutomaticKeyHandler instance, which will be used in a given conference.
      */
@@ -83,58 +95,76 @@ export class ManagedKeyHandler extends Listenable {
         this._participantEventQueue = [];
         this._processingEvents = false;
 
+        this.onUserJoined = this._onParticipantJoined.bind(this);
+        this.onUserLeft = this._onParticipantLeft.bind(this);
+        this.onEndpointMessageReceived = this._onEndpointMessageReceived.bind(this);
+        this.onConferenceLeft = this._onConferenceLeft.bind(this);
+        this.onConferenceJoined = () => this._conferenceJoined = true;
+        this.onMediaSessionStarted = this._onMediaSessionStarted.bind(this);
+        this.onTrackAdded = this._onTrackAddedHandler.bind(this);
+        this.onRemoteTrackAdded = this._setupReceiverE2EEForTrack.bind(this);
+        this.onTrackMuteChanged = this._trackMuteChanged.bind(this);
+        this.onSasUpdated = this.sasUpdatedHandler.bind(this);
+
         this.conference.on(
             JitsiConferenceEvents.USER_JOINED,
-            this._onParticipantJoined.bind(this),
+            this.onUserJoined,
         );
         this.conference.on(
             JitsiConferenceEvents.USER_LEFT,
-            this._onParticipantLeft.bind(this),
+            this.onUserLeft,
         );
         this.conference.on(
             JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
-            this._onEndpointMessageReceived.bind(this),
+            this.onEndpointMessageReceived,
         );
         this.conference.on(
             JitsiConferenceEvents.CONFERENCE_LEFT,
-            this._onConferenceLeft.bind(this),
+            this.onConferenceLeft,
         );
-        this.conference.on(JitsiConferenceEvents.CONFERENCE_JOINED, () => {
-            this._conferenceJoined = true;
-        });
+        this.conference.on(
+            JitsiConferenceEvents.CONFERENCE_JOINED,
+            this.onConferenceJoined
+        );
         this.conference.on(
             JitsiConferenceEvents._MEDIA_SESSION_STARTED,
-            this._onMediaSessionStarted.bind(this),
+            this.onMediaSessionStarted,
         );
         this.conference.on(
             JitsiConferenceEvents.TRACK_ADDED,
-            (track: JitsiLocalTrack) =>
-                track.isLocal() && this._onLocalTrackAdded(track),
+            this.onTrackAdded,
         );
         this.conference.rtc.on(
             RTCEvents.REMOTE_TRACK_ADDED,
-            (track: JitsiLocalTrack, tpc: TraceablePeerConnection) =>
-                this._setupReceiverE2EEForTrack(tpc, track),
+            this.onRemoteTrackAdded,
         );
         this.conference.on(
             JitsiConferenceEvents.TRACK_MUTE_CHANGED,
-            this._trackMuteChanged.bind(this),
+            this.onTrackMuteChanged,
         );
 
         this._conferenceJoined = false;
 
         this._olmAdapter = new OlmAdapter(this.myID);
 
-        this.e2eeCtx.on('sasUpdated', (sasStr: string) => {
-            const sas = generateEmojiSas(sasStr);
-
-            this.log('info', `Emitting SAS: ${sas.join(', ')}`);
-            this.conference.eventEmitter.emit(
-                JitsiConferenceEvents.E2EE_SAS_AVAILABLE,
-                sas,
-            );
-        });
+        this.e2eeCtx.on('sasUpdated', this.onSasUpdated);
     }
+
+    private _onTrackAddedHandler = (track: JitsiTrack) => {
+        if (track.isLocal()) {
+            this._onLocalTrackAdded(track as JitsiLocalTrack);
+        }
+    };
+
+    private sasUpdatedHandler = (sasStr: string) => {
+        const sas = generateEmojiSas(sasStr);
+
+        this.log('info', `Emitting SAS: ${sas.join(', ')}`);
+        this.conference.eventEmitter.emit(
+        JitsiConferenceEvents.E2EE_SAS_AVAILABLE,
+        sas,
+        );
+    };
 
     private async init() {
         await this._olmAdapter.init();
@@ -222,8 +252,8 @@ export class ManagedKeyHandler extends Listenable {
      * @private
      */
     private _setupReceiverE2EEForTrack(
-            tpc: TraceablePeerConnection,
             track: JitsiLocalTrack,
+            tpc: TraceablePeerConnection,
     ) {
         if (!this.enabled) {
             return;
@@ -390,8 +420,8 @@ export class ManagedKeyHandler extends Listenable {
     }
 
     private _onConferenceLeft() {
-        this.clearAllSessions();
-        this._olmAdapter.clearMySession();
+        this._conferenceJoined = false;
+        this.dispose();
     }
 
     private async updateKey(pId: string, ciphertext: string, pqCiphertext: string) {
@@ -410,12 +440,20 @@ export class ManagedKeyHandler extends Listenable {
         }
     }
 
-    private noOtherModerators(): boolean {
-        if (this.conference.isModerator()) return true;
-
+    private isThisParticipantFirst(pId: string): boolean {
+        const localParticipantId = this.myID;
         const participants = this.conference.getParticipants();
+        const list = participants.filter(
+            participant =>
+                (participant.hasFeature(FEATURE_E2EE)
+                || participant.getProperty('e2ee.enabled') === 'true')
+                && localParticipantId > participant.getId(),
+        ).sort((a, b) => a.getId().localeCompare(b.getId()));
 
-        return !participants.some(p => p.isModerator());
+        if (list.length === 0) return false;
+        const firstParticipant = list[0].getId();
+
+        return firstParticipant === pId;
     }
 
     private async _onEndpointMessageReceived(participant: JitsiParticipant, payload) {
@@ -516,7 +554,7 @@ export class ManagedKeyHandler extends Listenable {
                         pId,
                 );
 
-                if (!this.askedForChatKey && (participant.isModerator() || this.noOtherModerators())) {
+                if (!this.askedForChatKey && this.isThisParticipantFirst(pId)) {
                     this.log('info', `Requesting chat key from ${pId}.`);
                     this._sendMessage(
                         OLM_MESSAGE_TYPES.CHAT_KEY_REQUEST,
@@ -787,7 +825,7 @@ export class ManagedKeyHandler extends Listenable {
             `Should send session-init to IDs: [ ${list.map(p => p.getId())}]`,
         );
 
-        if (!this.askedForChatKey && list.length == 0) {
+        if (!this.askedForChatKey && list.length === 0) {
             this.log('info', 'Generated chat keys');
             const chatKeyECC = genSymmetricKey();
             const chatKeyPQ = genSymmetricKey();
@@ -851,6 +889,63 @@ export class ManagedKeyHandler extends Listenable {
             return Promise.all(promises);
         })();
         await this.initSessions;
+    }
+
+    dispose() {
+        this._olmAdapter.clearMySession();
+        this.clearAllSessions();
+        this.conference.off(
+            JitsiConferenceEvents.USER_JOINED,
+            this.onUserJoined,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.USER_LEFT,
+            this.onUserLeft,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
+            this.onEndpointMessageReceived,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.CONFERENCE_LEFT,
+            this.onConferenceLeft,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.CONFERENCE_JOINED,
+            this.onConferenceJoined
+        );
+        this.conference.off(
+            JitsiConferenceEvents._MEDIA_SESSION_STARTED,
+            this.onMediaSessionStarted,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.TRACK_ADDED,
+            this.onTrackAdded,
+        );
+        this.conference.rtc.off(
+            RTCEvents.REMOTE_TRACK_ADDED,
+            this.onRemoteTrackAdded,
+        );
+        this.conference.off(
+            JitsiConferenceEvents.TRACK_MUTE_CHANGED,
+            this.onTrackMuteChanged,
+        );
+        this.e2eeCtx.off('sasUpdated', this.onSasUpdated);
+
+        this.onUserJoined = null;
+        this.onUserLeft = null;
+        this.onEndpointMessageReceived = null;
+        this.onConferenceJoined = null;
+        this.onConferenceLeft = null;
+        this.onMediaSessionStarted = null;
+        this.onTrackAdded = null;
+        this.onRemoteTrackAdded = null;
+        this.onTrackMuteChanged = null;
+        this.onSasUpdated = null;
+
+        this.e2eeCtx.dispose();
+        this._reqs.clear();
+        this.update.clear();
     }
 
     /**

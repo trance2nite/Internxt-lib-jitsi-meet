@@ -43,6 +43,10 @@ export class E2EEncryption {
         return this._keyHandler.isEnabled();
     }
 
+    dispose() {
+        this._keyHandler.dispose();
+    }
+
     /**
      * Enables / disables End-To-End encryption.
      *

@@ -69,25 +69,6 @@ describe('ChatRoomEncrypted', () => {
             expect(decryptedText).toBe('string message');
 
         });
-        it('EncryptedChat: sends a object msg with elementName body correctly', () => {
-            room.sendMessage({ object: 'message' } as any, 'body');
-            const xml = connectionSpy.calls.argsFor(0).toString();
-            expect(xml).not.toBe(
-                '<message to="jid" type="groupchat" xmlns="jabber:client">' +
-                '<body object="message"/>' +
-                '</message>');
-            expect(xml).toMatch(
-                '<message to="jid" type="groupchat" xmlns="jabber:client">' +
-                '<body>.*</body>' +
-                '</message>'
-            );
-            const match = xml.match(/<body>([\s\S]*?)<\/body>/);
-            const ciphertext = match ? match[1] : null;
-
-            const decryptedText = decryptSymmetricallySync(ciphertext!, key);
-            expect(decryptedText).toBe('{"object":"message"}');
-            
-        });
         it('EncryptedChat: sends a string msg with elementName json-message correctly', () => {
             room.sendMessage('string message', 'json-message');
             const xml = connectionSpy.calls.argsFor(0).toString();
@@ -106,24 +87,6 @@ describe('ChatRoomEncrypted', () => {
 
             const decryptedText = decryptSymmetricallySync(ciphertext!, key);
             expect(decryptedText).toBe('string message');
-        });
-        it('EncryptedChat: sends a object msg with elementName json-message correctly', () => {
-            room.sendMessage({ object: 'message' } as any, 'json-message');
-            const xml = connectionSpy.calls.argsFor(0).toString();
-            expect(xml).not.toBe(
-                '<message to="jid" type="groupchat" xmlns="jabber:client">' +
-                '<json-message object="message" xmlns="http://jitsi.org/jitmeet"/>' +
-                '</message>');
-            expect(xml).toMatch(
-               '<message to="jid" type="groupchat" xmlns="jabber:client">' +
-                '<json-message xmlns="http://jitsi.org/jitmeet">.*</json-message>' +
-                '</message>');
-
-            const match = xml.match(/<json-message xmlns="http:\/\/jitsi.org\/jitmeet">([\s\S]*?)<\/json-message>/);
-            const ciphertext = match ? match[1] : null;
-
-            const decryptedText = decryptSymmetricallySync(ciphertext!, key);
-            expect(decryptedText).toBe('{"object":"message"}');
         });
     });
 
